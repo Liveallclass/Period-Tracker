@@ -1,0 +1,72 @@
+import logging
+from datetime import datetime, timedelta
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+
+# Enable logging
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Global variables
+cycle_length = 28  # Default cycle length (28 days)
+luteal_phase_length = 14  # Default luteal phase (14 days)
+
+# Start Command
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text("Welcome to the Period Tracker Bot!\n\n"
+                              "Please enter the start date of your last period in the format YYYY-MM-DD:")
+
+# Get user input for the last period start date
+def get_period_date(update: Update, context: CallbackContext):
+    try:
+        start_date = update.message.text.strip()  # Get the text entered by the user
+        start_date = datetime.strptime(start_date, "%Y-%m-%d")  # Convert to datetime object
+        context.user_data['start_date'] = start_date
+        update.message.reply_text(f"Last period start date recorded as: {start_date.strftime('%Y-%m-%d')}\n"
+                                  "I will now calculate your next period, ovulation date, and fertile window.")
+        calculate_dates(update, context)
+    except ValueError:
+        update.message.reply_text("Invalid date format. Please use YYYY-MM-DD.")
+
+# Calculate next period, ovulation date, and fertile window
+def calculate_dates(update: Update, context: CallbackContext):
+    start_date = context.user_data['start_date']
+    next_period = start_date + timedelta(days=cycle_length)
+    ovulation_date = next_period - timedelta(days=luteal_phase_length)
+    fertile_start = ovulation_date - timedelta(days=5)
+    fertile_end = ovulation_date + timedelta(days=1)
+
+    update.message.reply_text(f"\nYour next period will start on: {next_period.strftime('%Y-%m-%d')}\n"
+                              f"Your ovulation date is: {ovulation_date.strftime('%Y-%m-%d')}\n"
+                              f"Your fertile window is from {fertile_start.strftime('%Y-%m-%d')} to {fertile_end.strftime('%Y-%m-%d')}.")
+
+# Error handling for unexpected commands
+def error(update: Update, context: CallbackContext):
+    logger.warning('Update "%s" caused error "%s"', update, context.error)
+
+def main():
+    # Bot token (Your actual bot token provided by BotFather)
+    token = '7244471017:AAFz816J6XfXx7ukoDCzxMrAl2V3FWZxIZM'
+    
+    # Create Updater object and pass it your bot's token
+    updater = Updater(token, use_context=True)
+
+    # Get the dispatcher to register handlers
+    dispatcher = updater.dispatcher
+
+    # Add command handlers
+    dispatcher.add_handler(CommandHandler("start", start))
+
+    # Add message handler for user input (last period start date)
+    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, get_period_date))
+
+    # Log all errors
+    dispatcher.add_error_handler(error)
+
+    # Start the Bot
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == '__main__':
+    main()
